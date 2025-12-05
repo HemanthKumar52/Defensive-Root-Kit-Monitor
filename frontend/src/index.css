@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-white font-sans;
+  }
+}
+
+/* Glassmorphism Utilities */
+.glass {
+  @apply bg-surface/50 backdrop-blur-md border border-white/10;
+}
+
+.glass-card {
+  @apply bg-surface/80 backdrop-blur-lg border border-white/5 rounded-xl;
+}
