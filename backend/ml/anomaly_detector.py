@@ -11,6 +11,11 @@ class AnomalyDetector:
         self.scaler = StandardScaler()
         self.is_trained = False
         self.feature_columns = ['cpu_percent', 'memory_rss', 'num_threads', 'open_files_count']
+        
+        # Sequence Analysis (Phase 4 Upgrade)
+        # pid -> deque of last 10 feature vectors
+        self.sequence_history = {} 
+        self.MAX_SEQ_LEN = 10
 
     def _extract_features(self, processes: List[Dict[str, Any]]) -> pd.DataFrame:
         """
@@ -20,13 +25,12 @@ class AnomalyDetector:
         for p in processes:
             # Safely get values with defaults
             row = {
-                'cpu_percent': p.get('cpu_percent', 0.0) or 0.0, # psutil often returns None or 0.0 initially
-                'memory_rss': p.get('memory_info', 0),
+                'cpu_percent': p.get('cpu_percent', 0.0) or 0.0,
+                'memory_rss': p.get('memory_rss', 0),
                 'num_threads': p.get('num_threads', 1),
-                'open_files_count': 0 # calculating this is expensive, usually skipped in fast loops
+                'open_files_count': 0 
             }
-            # For this mock, we'll simulate some variance if it's missing to make the plot interesting
-            # In production, you'd ensure the collector gets these details.
+            # Simulate variance for mock if needed
             if row['memory_rss'] == 0:
                 row['memory_rss'] = np.random.randint(1000, 1000000)
             
@@ -62,34 +66,69 @@ class AnomalyDetector:
         if not processes:
             return []
             
-        if not self.is_trained:
-            # If not trained, just return with default safe values
-            for p in processes:
-                p['anomaly_score'] = 0.0
-                p['is_anomaly'] = False
-            return processes
+        # Update sequences (Phase 4)
+        for p in processes:
+            pid = p.get('pid')
+            mem = p.get('memory_rss', 0)
+            if pid:
+                if pid not in self.sequence_history:
+                    self.sequence_history[pid] = []
+                self.sequence_history[pid].append(mem)
+                if len(self.sequence_history[pid]) > self.MAX_SEQ_LEN:
+                    self.sequence_history[pid].pop(0)
 
-        df = self._extract_features(processes)
-        df = df.fillna(0)
-        X = self.scaler.transform(df)
+        # 1. Heuristic Check (Phase 1)
+        # If heuristics already flagged it, we respect that.
         
-        # decision_function: lower is more abnormal. We invert it for a "risk score"
-        # The range is roughly -0.5 to 0.5. We normalize to 0-100 roughly.
-        scores = self.model.decision_function(X)
-        predictions = self.model.predict(X) # -1 for outlier, 1 for inlier
+        # 2. ML Check (Phase 4)
+        scores = []
+        predictions = []
         
+        if self.is_trained:
+            df = self._extract_features(processes)
+            df = df.fillna(0)
+            X = self.scaler.transform(df)
+            
+            raw_scores = self.model.decision_function(X) # lower = more abnormal
+            raw_preds = self.model.predict(X) # -1 outlier
+            
+            # Normalize scores to 0-100
+            for s in raw_scores:
+                # Map -0.5...0.5 -> 100...0
+                norm = max(0, min(100, (0.5 - s) * 100))
+                scores.append(norm)
+            
+            predictions = list(raw_preds)
+        else:
+            scores = [0.0] * len(processes)
+            predictions = [1] * len(processes)
+            
         results = []
         for i, p in enumerate(processes):
-            # Convert decision function to a simplistic 0-100 score
-            # score is usually negative for anomalies.
-            # Typical range: -0.5 (bad) to 0.5 (good)
-            raw_score = scores[i]
+            ml_score = scores[i]
+            is_ml_anomaly = (predictions[i] == -1)
             
-            # Normalize: Let's map -0.5...0.5 to 100...0
-            normalized_score = max(0, min(100, (0.5 - raw_score) * 100))
+            # Combine Heuristic + ML
+            heuristic_suspicious = p.get('is_suspicious', False)
             
-            p['anomaly_score'] = round(normalized_score, 2)
-            p['is_anomaly'] = bool(predictions[i] == -1)
+            # Phase 4: Sequence Anomaly (Sudden Memory Spike)
+            pid = p.get('pid')
+            seq_anomaly = False
+            if pid in self.sequence_history and len(self.sequence_history[pid]) >= 5:
+                hist = self.sequence_history[pid]
+                if max(hist) > 0 and (max(hist) - min(hist)) / (max(hist) + 1) > 0.5:
+                     # > 50% change in memory window
+                     seq_anomaly = True
+            
+            if heuristic_suspicious or seq_anomaly:
+                # Boost score significantly
+                p['anomaly_score'] = float(max(ml_score, 90.0))
+                p['is_anomaly'] = True
+                if seq_anomaly: p['anomalies'] = p.get('anomalies', []) + ["Behavioral: Sudden Memory Spike"]
+            else:
+                p['anomaly_score'] = float(round(ml_score, 2))
+                p['is_anomaly'] = bool(is_ml_anomaly)
+                
             results.append(p)
             
         return results

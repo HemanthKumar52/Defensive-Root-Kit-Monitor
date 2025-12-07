@@ -94,18 +94,35 @@ function App() {
             color={stats.anomalies_detected > 0 ? "danger" : "primary"} 
           />
           <StatsCard 
-            title="CPU Load" 
-            value={`${stats.system_cpu}%`} 
+             title="Integrity Violations"
+             value={stats.integrity_issues || 0}
+             icon={ShieldAlert}
+             color={stats.integrity_issues > 0 ? "warning" : "success"}
+          />
+          <StatsCard 
+            title="System Risk" 
+            value={`${stats.system_risk_score}/100`} 
             icon={Cpu} 
             color="secondary" 
           />
-          <StatsCard 
-            title="Memory Usage" 
-            value={`${stats.system_memory}%`} 
-            icon={HardDrive} 
-            color="secondary" 
-          />
         </div>
+
+        {/* ALERT: Integrity Issues */}
+        {data.system_issues && data.system_issues.length > 0 && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 animate-bounce-slow">
+             <h3 className="text-red-400 font-bold flex items-center gap-2 mb-2">
+                <ShieldAlert size={20} /> CRITICAL SYSTEM INTEGRITY ALERT
+             </h3>
+             <div className="space-y-2">
+                {data.system_issues.map((issue, idx) => (
+                   <div key={idx} className="flex items-center justify-between text-sm bg-black/20 p-2 rounded">
+                      <span className="text-gray-300 font-mono">{issue.type}: {issue.path || issue.name}</span>
+                      <span className="text-red-400 font-bold uppercase">{issue.severity}</span>
+                   </div>
+                ))}
+             </div>
+          </div>
+        )}
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -153,19 +170,23 @@ function App() {
 
             {/* Quick Actions / Tips */}
             <div className="glass-card p-6">
-              <h3 className="text-white font-bold mb-2">System Status</h3>
+              <h3 className="text-white font-bold mb-2">Defense Matrix Active</h3>
               <div className="space-y-3">
                 <div className="flex items-center gap-3 text-sm text-gray-400">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                  Isolation Forest Active
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  All 11 Defensive Layers Active
                 </div>
                 <div className="flex items-center gap-3 text-sm text-gray-400">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                  Privilege Monitor: Nominal
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  P4-P5: ML & Signatures
                 </div>
                 <div className="flex items-center gap-3 text-sm text-gray-400">
-                  <div className="w-1.5 h-1.5 rounded-full bg-accent" />
-                  Last Scan: Just now
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  P6-P8: Priv/Persist/Evasion
+                </div>
+                 <div className="flex items-center gap-3 text-sm text-gray-400">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  P9-P11: Resp/UI/Opt
                 </div>
               </div>
             </div>
