@@ -7,21 +7,21 @@ export function useMonitor() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch(`${API_Base}/dashboard`);
-        if (!res.ok) throw new Error('Failed to fetch data');
-        const json = await res.json();
-        setData(json);
-        setError(null);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchData = async () => {
+    try {
+      const res = await fetch(`${API_Base}/dashboard`);
+      if (!res.ok) throw new Error('Failed to fetch data');
+      const json = await res.json();
+      setData(json);
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 2000); // Poll every 2s
     return () => clearInterval(interval);
@@ -35,5 +35,5 @@ export function useMonitor() {
     }
   };
 
-  return { data, loading, error, trainModel };
+  return { data, loading, error, trainModel, refresh: fetchData };
 }

@@ -97,8 +97,17 @@ class SystemMonitor:
             p_ps = psutil_procs.get(pid)
             p_nt = native_procs.get(pid)
             
-            combined = p_ps if p_ps else p_nt
+            combined = p_ps.copy() if p_ps else p_nt.copy()
             if not combined: continue
+            
+            # Set Detection Flags
+            combined['found_by_psutil'] = bool(p_ps)
+            combined['found_by_ntquery'] = bool(p_nt)
+            
+            # Mock Kernel Scan for demo: assume system processes are verified by kernel
+            # In real rootkit: specific callback results would be here
+            is_system = combined.get('name') in ['system', 'registry', 'smss.exe', 'csrss.exe', 'wininit.exe', 'services.exe', 'lsass.exe']
+            combined['found_by_kernel'] = is_system or bool(p_nt)
             
             combined['is_hidden'] = False
             combined['is_suspicious'] = False
@@ -110,6 +119,10 @@ class SystemMonitor:
                     combined['is_hidden'] = True
                     combined['is_suspicious'] = True
                     combined['anomalies'].append("Hidden from standard API (DKOM?)")
+                elif p_ps and not p_nt:
+                     # Visible in API but hidden from Native? Rare but possible injection
+                     combined['is_suspicious'] = True
+                     combined['anomalies'].append("Ghost Process (Visible in API, missing in Native)")
             
             # Phase 1: Behavior (Parent-Child)
             name = combined.get('name', '')
